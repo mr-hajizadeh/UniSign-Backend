@@ -30,7 +30,6 @@ MANIFEST
 *.pyo
 *.sqlite3
 media/
-static/
 
 # VS Code
 .vscode/
