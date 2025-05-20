@@ -1,0 +1,31 @@
+{% load static %}
+<!DOCTYPE html>
+<html>
+<head>
+    <title>افزودن درس</title>
+    <link rel="stylesheet" href="{% static 'admin/jquery.ui.datepicker.jalali/themes/base/jquery-ui.min.css' %}">
+
+</head>
+<body>
+<h2>افزودن درس</h2>
+<form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit">ارسال</button>
+</form>
+
+<link href="{% static 'jalali_date_new/css/jalalidatepicker.min.css' %}" rel="stylesheet">
+<script src="{% static 'jalali_date_new/js/jalalidatepicker.min.js' %}" type="text/javascript"></script>
+<script>
+    jalaliDatepicker.startWatch(
+        {
+            separatorChars: {
+                date: "-"
+            },
+            time: true
+        }
+    );
+</script>
+{{ form.media }}
+</body>
+</html>
