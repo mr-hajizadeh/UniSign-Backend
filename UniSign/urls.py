@@ -13,6 +13,7 @@ from .views import (
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('', RedirectView.as_view(url='/admin/', permanent=False)),
     path('add-course/', add_course, name='add-course'),
     path('api/courses/<int:course_id>/students/', get_course_students, name='course-students'),
     path('api/students/<int:student_id>/signature/', upload_signature, name='upload-signature'),
