@@ -46,7 +46,6 @@ INSTALLED_APPS = [
     "django.contrib.admin",
     'rest_framework',
     'rest_framework_simplejwt',
-    # 'rest_framework_simplejwt.token_blacklist',
 ]
 
 JALALI_DATE_DEFAULTS = {
