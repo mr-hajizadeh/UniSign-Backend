@@ -103,10 +103,10 @@ WSGI_APPLICATION = 'UniSign.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'uni',  # اسم دیتابیس
+        'NAME': 'nice_lewin',  # اسم دیتابیس
         'USER': 'root',  # یوزر دیتابیس
-        'PASSWORD': '',  # رمز عبور
-        'HOST': 'localhost',  # یا IP سرور
+        'PASSWORD': 'UvonLzMY62tRgYaLneQUECqL',  # رمز عبور
+        'HOST': 'unisigndb',  # یا IP سرور
         'PORT': '3306',  # پورت پیش‌فرض MySQL
         'OPTIONS': {
             'sql_mode': 'STRICT_TRANS_TABLES',
