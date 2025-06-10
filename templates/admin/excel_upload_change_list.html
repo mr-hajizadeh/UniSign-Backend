@@ -1,0 +1,652 @@
+{% extends "admin/change_list.html" %}
+{% load i18n admin_urls %}
+
+{% block object-tools-items %}
+    {{ block.super }}
+    <li>
+        <a href="#" onclick="showExcelUploadModal(); return false;" class="addlink">
+            آپلود اکسل
+        </a>
+    </li>
+    <li>
+        <a href="#" onclick="showPdfUploadModal(); return false;" class="addlink">
+            آپلود PDF
+        </a>
+    </li>
+{% endblock %}
+
+{% block extrahead %}
+{{ block.super }}
+<style>
+    .modal-backdrop {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0,0,0,0.5);
+        backdrop-filter: blur(5px);
+        display: none;
+        z-index: 1000;
+    }
+
+    .modal-content {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background-color: white;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        z-index: 1001;
+        width: 90%;
+        max-width: 500px;
+    }
+
+    .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid #eee;
+    }
+
+    .modal-title {
+        font-size: 1.2em;
+        font-weight: bold;
+        color: #333;
+    }
+
+    .close-button {
+        background: none;
+        border: none;
+        font-size: 1.5em;
+        cursor: pointer;
+        color: #666;
+        padding: 0;
+        line-height: 1;
+    }
+
+    .close-button:hover {
+        color: #333;
+    }
+
+    .form-group {
+        margin-bottom: 15px;
+    }
+
+    .form-group label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: bold;
+    }
+
+    .form-group input[type="text"] {
+        width: calc(100% - 22px); /* Adjusting for padding and border */
+        padding: 10px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        box-sizing: border-box; /* Include padding and border in the element's total width and height */
+    }
+
+    .file-upload-container {
+        border: 2px dashed #ccc;
+        padding: 20px;
+        text-align: center;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        transition: all 0.3s ease;
+    }
+
+    .file-upload-container:hover {
+        border-color: #666;
+    }
+
+    .file-upload-container.dragover {
+        border-color: #2196F3;
+        background-color: rgba(33, 150, 243, 0.1);
+    }
+
+    .file-upload-icon {
+        font-size: 48px;
+        color: #666;
+        margin-bottom: 10px;
+    }
+
+    .file-upload-text {
+        color: #666;
+        margin-bottom: 10px;
+    }
+
+    .file-name {
+        margin-top: 10px;
+        color: #2196F3;
+        font-weight: bold;
+    }
+
+    .submit-button {
+        background-color: #2196F3;
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 4px;
+        cursor: pointer;
+        width: 100%;
+        font-size: 1em;
+        transition: background-color 0.3s ease;
+    }
+
+    .submit-button:hover {
+        background-color: #1976D2;
+    }
+
+    .submit-button:disabled {
+        background-color: #ccc;
+        cursor: not-allowed;
+    }
+
+    .progress-container {
+        display: none;
+        margin-top: 20px;
+    }
+
+    .progress-bar {
+        width: 100%;
+        height: 20px;
+        background-color: #f0f0f0;
+        border-radius: 10px;
+        overflow: hidden;
+    }
+
+    .progress {
+        width: 0%;
+        height: 100%;
+        background-color: #2196F3;
+        transition: width 0.3s ease;
+    }
+
+    .progress-text {
+        text-align: center;
+        margin-top: 10px;
+        color: #666;
+    }
+
+    .error-message {
+        color: #f44336;
+        margin-top: 10px;
+        text-align: center;
+        display: none;
+    }
+
+    .success-message {
+        background-color: #4CAF50;
+        color: white;
+        padding: 20px;
+        border-radius: 8px;
+        margin-top: 20px;
+        text-align: center;
+        display: none;
+        animation: fadeIn 0.5s ease;
+    }
+
+    .success-message i {
+        font-size: 48px;
+        margin-bottom: 15px;
+        display: block;
+    }
+
+    .success-message .message {
+        font-size: 18px;
+        margin-bottom: 10px;
+    }
+
+    .success-message .details {
+        font-size: 14px;
+        opacity: 0.9;
+    }
+
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(-10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+    }
+
+    .processing-icon {
+        display: none;
+        text-align: center;
+        margin: 20px 0;
+    }
+
+    .processing-icon i {
+        font-size: 48px;
+        color: #2196F3;
+        animation: spin 1s linear infinite;
+    }
+
+    .circle-progress {
+        position: relative;
+        width: 60px;
+        height: 60px;
+        margin: 20px auto;
+        display: none;
+    }
+
+    .circle-progress svg {
+        transform: rotate(-90deg);
+    }
+
+    .circle-progress circle {
+        fill: none;
+        stroke-width: 4;
+    }
+
+    .circle-progress .background {
+        stroke: #f0f0f0;
+    }
+
+    .circle-progress .progress {
+        stroke: #2196F3;
+        stroke-linecap: round;
+        animation: spin 1s linear infinite;
+    }
+
+    .loading-indicator {
+        display: none;
+        text-align: center;
+        margin-top: 20px;
+    }
+
+    .loading-indicator .spinner {
+        width: 40px;
+        height: 40px;
+        border: 4px solid #f3f3f3;
+        border-top: 4px solid #2196F3;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin: 0 auto 10px;
+    }
+
+    .loading-indicator .text {
+        color: #666;
+        font-size: 14px;
+    }
+</style>
+
+<!-- Excel Upload Modal -->
+<div id="excelUploadModal" class="modal-backdrop">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2 class="modal-title">آپلود فایل اکسل</h2>
+            <button class="close-button" onclick="closeExcelUploadModal()">&times;</button>
+        </div>
+        <form id="excelUploadForm" method="post" enctype="multipart/form-data" action="{% url 'admin:upload-excel' %}">
+            {% csrf_token %}
+            <div class="form-group">
+                <label for="id_term">ترم:</label>
+                <input type="text" name="term" id="id_term" placeholder="مثال: ۱۴۰۳-۲" required>
+            </div>
+            <div class="file-upload-container" id="excelDropArea">
+                <input type="file" id="excelFileInput" name="file" accept=".xls,.xlsx" hidden required>
+                <div class="file-upload-text">فایل اکسل را اینجا رها کنید یا کلیک کنید</div>
+                <div id="excelFileName" class="file-name"></div>
+            </div>
+            <button type="submit" class="submit-button" id="uploadExcelButton">آپلود</button>
+        </form>
+        <div class="success-message" id="excelSuccessMessage">
+            <i class="fas fa-check-circle"></i>
+            <div class="message">فایل با موفقیت آپلود شد!</div>
+            <div class="details" id="excelSuccessDetails"></div>
+        </div>
+        <div class="error-message" id="excelErrorMessage"></div>
+        <div class="loading-indicator" id="excelLoadingIndicator">
+            <div class="spinner"></div>
+            <div class="progress-text">در حال پردازش...</div>
+        </div>
+    </div>
+</div>
+
+<!-- PDF Upload Modal -->
+<div id="pdfUploadModal" class="modal-backdrop">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 class="modal-title">آپلود فایل PDF</h3>
+            <button class="close-button" onclick="closePdfUploadModal()">&times;</button>
+        </div>
+        <form id="pdfUploadForm" method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+            <div class="file-upload-container" id="pdfDropZone">
+                <div class="file-upload-icon">📄</div>
+                <div class="file-upload-text">فایل PDF را اینجا رها کنید یا کلیک کنید</div>
+                <input type="file" name="pdf_file" id="pdfFileInput" accept=".pdf" style="display: none;">
+            </div>
+            <div class="file-name" id="pdfFileName"></div>
+            <div class="error-message" id="pdfErrorMessage"></div>
+            
+            <button type="submit" class="submit-button" id="pdfSubmitButton" disabled>آپلود</button>
+
+            <div class="loading-indicator" id="pdfLoadingIndicator">
+                <div class="spinner"></div>
+                <div class="text">در حال پردازش اطلاعات...</div>
+            </div>
+
+            <div class="success-message" id="pdfSuccessMessage">
+                <i class="fas fa-check-circle"></i>
+                <div class="message">اطلاعات با موفقیت استخراج و ذخیره شد</div>
+                <div class="details">در حال انتقال به صفحه لیست دروس...</div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    // Excel Upload Modal Functions
+    function showExcelUploadModal() {
+        document.getElementById('excelUploadModal').style.display = 'block';
+    }
+
+    function closeExcelUploadModal() {
+        if (document.getElementById('excelLoadingIndicator').style.display === 'block') {
+            return;
+        }
+        document.getElementById('excelUploadModal').style.display = 'none';
+        resetExcelForm();
+    }
+
+    function resetExcelForm() {
+        document.getElementById('excelUploadForm').reset();
+        document.getElementById('excelFileName').textContent = '';
+        document.getElementById('excelErrorMessage').style.display = 'none';
+        document.getElementById('excelLoadingIndicator').style.display = 'none';
+        document.getElementById('excelSuccessMessage').style.display = 'none';
+        document.getElementById('uploadExcelButton').disabled = true;
+    }
+
+    // PDF Upload Modal Functions
+    function showPdfUploadModal() {
+        document.getElementById('pdfUploadModal').style.display = 'block';
+    }
+
+    function closePdfUploadModal() {
+        if (document.getElementById('pdfLoadingIndicator').style.display === 'block') {
+            return;
+        }
+        document.getElementById('pdfUploadModal').style.display = 'none';
+        resetPdfForm();
+    }
+
+    function resetPdfForm() {
+        document.getElementById('pdfUploadForm').reset();
+        document.getElementById('pdfFileName').textContent = '';
+        document.getElementById('pdfErrorMessage').style.display = 'none';
+        document.getElementById('pdfLoadingIndicator').style.display = 'none';
+        document.getElementById('pdfSuccessMessage').style.display = 'none';
+        document.getElementById('pdfSubmitButton').disabled = true;
+    }
+
+    // Excel Upload Event Listeners
+    document.getElementById('excelDropArea').addEventListener('click', function() {
+        document.getElementById('excelFileInput').click();
+    });
+
+    document.getElementById('excelFileInput').addEventListener('change', function(e) {
+        handleExcelFileSelect(e.target.files[0]);
+    });
+
+    document.getElementById('excelDropArea').addEventListener('dragover', function(e) {
+        e.preventDefault();
+        this.classList.add('dragover');
+    });
+
+    document.getElementById('excelDropArea').addEventListener('dragleave', function(e) {
+        e.preventDefault();
+        this.classList.remove('dragover');
+    });
+
+    document.getElementById('excelDropArea').addEventListener('drop', function(e) {
+        e.preventDefault();
+        this.classList.remove('dragover');
+        handleExcelFileSelect(e.dataTransfer.files[0]);
+    });
+
+    function handleExcelFileSelect(file) {
+        if (file) {
+            if (file.name.match(/\.(xlsx|xls)$/)) {
+                document.getElementById('excelFileName').textContent = file.name;
+                document.getElementById('excelErrorMessage').style.display = 'none';
+                document.getElementById('uploadExcelButton').disabled = false;
+            } else {
+                document.getElementById('excelFileName').textContent = '';
+                document.getElementById('excelErrorMessage').textContent = 'لطفاً فقط فایل اکسل آپلود کنید.';
+                document.getElementById('excelErrorMessage').style.display = 'block';
+                document.getElementById('uploadExcelButton').disabled = true;
+            }
+        }
+    }
+
+    // PDF Upload Event Listeners
+    document.getElementById('pdfDropZone').addEventListener('click', function() {
+        document.getElementById('pdfFileInput').click();
+    });
+
+    document.getElementById('pdfFileInput').addEventListener('change', function(e) {
+        handlePdfFileSelect(e.target.files[0]);
+    });
+
+    document.getElementById('pdfDropZone').addEventListener('dragover', function(e) {
+        e.preventDefault();
+        this.classList.add('dragover');
+    });
+
+    document.getElementById('pdfDropZone').addEventListener('dragleave', function(e) {
+        e.preventDefault();
+        this.classList.remove('dragover');
+    });
+
+    document.getElementById('pdfDropZone').addEventListener('drop', function(e) {
+        e.preventDefault();
+        this.classList.remove('dragover');
+        handlePdfFileSelect(e.dataTransfer.files[0]);
+    });
+
+    function handlePdfFileSelect(file) {
+        if (file) {
+            if (file.name.match(/\.pdf$/)) {
+                document.getElementById('pdfFileName').textContent = file.name;
+                document.getElementById('pdfErrorMessage').style.display = 'none';
+                document.getElementById('pdfSubmitButton').disabled = false;
+            } else {
+                document.getElementById('pdfFileName').textContent = '';
+                document.getElementById('pdfErrorMessage').textContent = 'لطفاً فقط فایل PDF آپلود کنید.';
+                document.getElementById('pdfErrorMessage').style.display = 'block';
+                document.getElementById('pdfSubmitButton').disabled = true;
+            }
+        }
+    }
+
+    // Excel Form Submit
+    document.getElementById('excelUploadForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const formData = new FormData(this);
+        const submitButton = document.getElementById('uploadExcelButton');
+        const loadingIndicator = document.getElementById('excelLoadingIndicator');
+        const errorMessage = document.getElementById('excelErrorMessage');
+        const successMessage = document.getElementById('excelSuccessMessage');
+        const closeButton = document.querySelector('#excelUploadModal .close-button');
+        const modal = document.getElementById('excelUploadModal');
+        const modalContent = modal.querySelector('.modal-content');
+
+        submitButton.disabled = true;
+        loadingIndicator.style.display = 'block';
+        errorMessage.style.display = 'none';
+        successMessage.style.display = 'none';
+        closeButton.style.display = 'none';
+
+        modal.style.pointerEvents = 'none';
+        modalContent.style.pointerEvents = 'none';
+
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', '{% url "admin:upload-excel" %}', true);
+
+        xhr.onload = function() {
+            if (xhr.status === 200) {
+                try {
+                    const response = JSON.parse(xhr.responseText);
+                    if (response.success) {
+                        loadingIndicator.style.display = 'none';
+                        successMessage.style.display = 'block';
+                        closeButton.style.display = 'block';
+                        setTimeout(function() {
+                            window.location.href = response.redirect_url;
+                        }, 2000);
+                    } else {
+                        errorMessage.textContent = response.message;
+                        errorMessage.style.display = 'block';
+                        submitButton.disabled = false;
+                        closeButton.style.display = 'block';
+                        loadingIndicator.style.display = 'none';
+                        modal.style.pointerEvents = 'auto';
+                        modalContent.style.pointerEvents = 'auto';
+                    }
+                } catch (e) {
+                    errorMessage.textContent = 'خطا در پردازش پاسخ سرور';
+                    errorMessage.style.display = 'block';
+                    submitButton.disabled = false;
+                    closeButton.style.display = 'block';
+                    loadingIndicator.style.display = 'none';
+                    modal.style.pointerEvents = 'auto';
+                    modalContent.style.pointerEvents = 'auto';
+                }
+            } else {
+                errorMessage.textContent = 'خطا در آپلود فایل';
+                errorMessage.style.display = 'block';
+                submitButton.disabled = false;
+                closeButton.style.display = 'block';
+                loadingIndicator.style.display = 'none';
+                modal.style.pointerEvents = 'auto';
+                modalContent.style.pointerEvents = 'auto';
+            }
+        };
+
+        xhr.onerror = function() {
+            errorMessage.textContent = 'خطا در ارتباط با سرور';
+            errorMessage.style.display = 'block';
+            submitButton.disabled = false;
+            closeButton.style.display = 'block';
+            loadingIndicator.style.display = 'none';
+            modal.style.pointerEvents = 'auto';
+            modalContent.style.pointerEvents = 'auto';
+        };
+
+        xhr.send(formData);
+    });
+
+    // PDF Form Submit
+    document.getElementById('pdfUploadForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const formData = new FormData(this);
+        const submitButton = document.getElementById('pdfSubmitButton');
+        const loadingIndicator = document.getElementById('pdfLoadingIndicator');
+        const errorMessage = document.getElementById('pdfErrorMessage');
+        const successMessage = document.getElementById('pdfSuccessMessage');
+        const closeButton = document.querySelector('#pdfUploadModal .close-button');
+        const modal = document.getElementById('pdfUploadModal');
+        const modalContent = modal.querySelector('.modal-content');
+
+        submitButton.disabled = true;
+        loadingIndicator.style.display = 'block';
+        errorMessage.style.display = 'none';
+        successMessage.style.display = 'none';
+        closeButton.style.display = 'none';
+
+        modal.style.pointerEvents = 'none';
+        modalContent.style.pointerEvents = 'none';
+
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', '{% url "admin:upload_course_pdf" %}', true);
+
+        xhr.onload = function() {
+            if (xhr.status === 200) {
+                try {
+                    const response = JSON.parse(xhr.responseText);
+                    if (response.success) {
+                        loadingIndicator.style.display = 'none';
+                        successMessage.style.display = 'block';
+                        closeButton.style.display = 'block';
+                        setTimeout(function() {
+                            window.location.href = response.redirect_url;
+                        }, 2000);
+                    } else {
+                        errorMessage.textContent = response.message;
+                        errorMessage.style.display = 'block';
+                        submitButton.disabled = false;
+                        closeButton.style.display = 'block';
+                        loadingIndicator.style.display = 'none';
+                        modal.style.pointerEvents = 'auto';
+                        modalContent.style.pointerEvents = 'auto';
+                    }
+                } catch (e) {
+                    errorMessage.textContent = 'خطا در پردازش پاسخ سرور';
+                    errorMessage.style.display = 'block';
+                    submitButton.disabled = false;
+                    closeButton.style.display = 'block';
+                    loadingIndicator.style.display = 'none';
+                    modal.style.pointerEvents = 'auto';
+                    modalContent.style.pointerEvents = 'auto';
+                }
+            } else {
+                errorMessage.textContent = 'خطا در آپلود فایل';
+                errorMessage.style.display = 'block';
+                submitButton.disabled = false;
+                closeButton.style.display = 'block';
+                loadingIndicator.style.display = 'none';
+                modal.style.pointerEvents = 'auto';
+                modalContent.style.pointerEvents = 'auto';
+            }
+        };
+
+        xhr.onerror = function() {
+            errorMessage.textContent = 'خطا در ارتباط با سرور';
+            errorMessage.style.display = 'block';
+            submitButton.disabled = false;
+            closeButton.style.display = 'block';
+            loadingIndicator.style.display = 'none';
+            modal.style.pointerEvents = 'auto';
+            modalContent.style.pointerEvents = 'auto';
+        };
+
+        xhr.send(formData);
+    });
+
+    // Close modals when clicking outside
+    window.onclick = function(event) {
+        const excelModal = document.getElementById('excelUploadModal');
+        const pdfModal = document.getElementById('pdfUploadModal');
+        
+        if (event.target == excelModal && 
+            document.getElementById('excelLoadingIndicator').style.display !== 'block') {
+            closeExcelUploadModal();
+        }
+        if (event.target == pdfModal && 
+            document.getElementById('pdfLoadingIndicator').style.display !== 'block') {
+            closePdfUploadModal();
+        }
+    }
+
+    // Prevent closing with Escape key while processing
+    document.addEventListener('keydown', function(event) {
+        const excelLoadingIndicator = document.getElementById('excelLoadingIndicator');
+        const pdfLoadingIndicator = document.getElementById('pdfLoadingIndicator');
+        
+        if (event.key === 'Escape' && 
+            (excelLoadingIndicator.style.display === 'block' || pdfLoadingIndicator.style.display === 'block')) {
+            event.preventDefault();
+        }
+    });
+</script>
+{% endblock %} 

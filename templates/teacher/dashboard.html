@@ -1,0 +1,61 @@
+{% extends "admin/base_site.html" %}
+{% load i18n static %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row">
+        <div class="col-md-12">
+            <h2>داشبورد استاد</h2>
+            <div class="card">
+                <div class="card-header">
+                    <h3>درس‌های من</h3>
+                </div>
+                <div class="card-body">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>کد درس</th>
+                                <th>نام درس</th>
+                                <th>کد گروه</th>
+                                <th>ظرفیت کل</th>
+                                <th>تعداد دانشجو</th>
+                                <th>ظرفیت خالی</th>
+                                <th>زمان کلاس</th>
+                                <th>محل امتحان</th>
+                                <th>تاریخ امتحان</th>
+                                <th>زمان امتحان</th>
+                                <th>آپلود PDF</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for course in courses %}
+                            <tr>
+                                <td>{{ course.course_code }}</td>
+                                <td>{{ course.course_name }}</td>
+                                <td>{{ course.group_code }}</td>
+                                <td>{{ course.max_capacity }}</td>
+                                <td>{{ course.student_count }}</td>
+                                <td>{{ course.empty_capacity }}</td>
+                                <td>{{ course.class_time }}</td>
+                                <td>{{ course.exam_location }}</td>
+                                <td>{{ course.exam_date }}</td>
+                                <td>{{ course.exam_time }}</td>
+                                <td>
+                                    <form method="post" action="{% url 'upload_course_pdf' course.id %}" enctype="multipart/form-data" class="d-inline">
+                                        {% csrf_token %}
+                                        <input type="file" name="pdf_file" accept=".pdf" class="d-none" id="pdf-upload-{{ course.id }}" onchange="this.form.submit()">
+                                        <button type="button" class="btn btn-primary btn-sm" onclick="document.getElementById('pdf-upload-{{ course.id }}').click()">
+                                            آپلود PDF
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

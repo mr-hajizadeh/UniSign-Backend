@@ -1,0 +1,26 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block extrahead %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'admin/jquery.ui.datepicker.jalali/themes/base/jquery-ui.css' %}">
+<script src="{% static 'admin/jquery.ui.datepicker.jalali/scripts/jquery.ui.datepicker-cc.js' %}"></script>
+<script src="{% static 'admin/jquery.ui.datepicker.jalali/scripts/jquery.ui.datepicker-cc-fa.js' %}"></script>
+<script src="{% static 'admin/jquery.ui.datepicker.jalali/scripts/calendar.js' %}"></script>
+<script src="{% static 'admin/jquery.ui.datepicker.jalali/scripts/calendar-setup.js' %}"></script>
+<script src="{% static 'admin/jquery.ui.datepicker.jalali/scripts/calendar-fa.js' %}"></script>
+<script>
+    $(document).ready(function() {
+        // Add Jalali datepicker to all date input fields
+        $('input[type="date"], input[type="text"][name*="date"]').each(function() {
+            $(this).attr('type', 'text');
+            $(this).datepicker({
+                dateFormat: 'yy/mm/dd',
+                changeMonth: true,
+                changeYear: true,
+                yearRange: '1300:1500'
+            });
+        });
+    });
+</script>
+{% endblock %} 
