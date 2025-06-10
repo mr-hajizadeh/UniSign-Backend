@@ -314,11 +314,14 @@ class CourseAdmin(JalaliDateMixin, admin.ModelAdmin):
             qs = qs.filter(teacher=request.user.teacher)
         
         # اگر فیلتر ترم اعمال نشده بود، بر اساس آخرین ترم فیلتر کن
-        # Django admin filter for ForeignKey uses param name 'field_name__id__exact'
         if 'term__id__exact' not in request.GET:
-            latest_term = Term.objects.latest('created_at')
-            if latest_term:
-                qs = qs.filter(term=latest_term)
+            try:
+                latest_term = Term.objects.latest('created_at')
+                if latest_term:
+                    qs = qs.filter(term=latest_term)
+            except Term.DoesNotExist:
+                # اگر هیچ ترمی وجود نداشت، همه دروس را نمایش بده
+                pass
                 
         return qs
 
