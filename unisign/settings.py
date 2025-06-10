@@ -115,6 +115,7 @@ WSGI_APPLICATION = 'unisign.wsgi.application'
 # }
 
 DATABASES = {
+
     'default': {
         'ENGINE': 'django.db.backends.mysql',
         'NAME': 'hungry_lewin',  # اسم دیتابیس
