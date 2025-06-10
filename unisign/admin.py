@@ -313,15 +313,11 @@ class CourseAdmin(JalaliDateMixin, admin.ModelAdmin):
         if is_teacher(request.user):
             qs = qs.filter(teacher=request.user.teacher)
         
-        # اگر فیلتر ترم اعمال نشده بود، بر اساس آخرین ترم فیلتر کن
-        if 'term__id__exact' not in request.GET:
-            try:
-                latest_term = Term.objects.latest('created_at')
-                if latest_term:
-                    qs = qs.filter(term=latest_term)
-            except Term.DoesNotExist:
-                # اگر هیچ ترمی وجود نداشت، همه دروس را نمایش بده
-                pass
+        # اگر فیلتر ترم اعمال نشده بود و ترمی وجود داشت، بر اساس آخرین ترم فیلتر کن
+        if 'term__id__exact' not in request.GET and Term.objects.exists():
+            latest_term = Term.objects.latest('created_at')
+            if latest_term:
+                qs = qs.filter(term=latest_term)
                 
         return qs
 
