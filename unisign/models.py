@@ -62,6 +62,7 @@ class Course(models.Model):
                 else:
                     date_part = self.exam_date
                     time_part = '00:00'
+
                 
                 date_parts = date_part.split('/')
                 time_parts = time_part.split(':')
