@@ -286,15 +286,19 @@ class CourseAdmin(JalaliDateMixin, admin.ModelAdmin):
     def get_queryset(self, request):
         qs = super().get_queryset(request)
         
-        # فیلتر بر اساس کاربر (استاد یا ادمین)
+        # فیلتر بر اساس کاربر (استاد می‌تواند فقط انتخاب واحد دروس خودش را ببیند)
         if is_teacher(request.user):
             qs = qs.filter(teacher=request.user.teacher)
         
-        # اگر فیلتر ترم اعمال نشده بود و ترمی وجود داشت، بر اساس آخرین ترم فیلتر کن
-        if 'term__id__exact' not in request.GET and Term.objects.exists():
-            latest_term = Term.objects.latest('created_at')
-            if latest_term:
-                qs = qs.filter(term=latest_term)
+        # اگر فیلتر ترم اعمال نشده بود، بر اساس آخرین ترم فیلتر کن
+        if 'term__id__exact' not in request.GET:
+            try:
+                latest_term = Term.objects.latest('created_at')
+                if latest_term:
+                    qs = qs.filter(term=latest_term)
+            except Term.DoesNotExist:
+                # اگر هیچ ترمی وجود نداشت، همه رکوردها را نمایش بده
+                pass
                 
         return qs
 
@@ -346,15 +350,15 @@ class CourseAdmin(JalaliDateMixin, admin.ModelAdmin):
                     for _, row in df.iterrows():
                         try:
                             # 2. Create or get teacher
-                            teacher_national_id = row['کدملی‌مدرس']
-                            teacher_name = row['نام‌مدرس']
+                            teacher_national_id = str(row['کدملی‌مدرس']).zfill(10)  # اضافه کردن صفر به ابتدای کد ملی تا 10 رقم
+                            teacher_name = str(row['نام‌مدرس']).strip()
                             
                             # First check if teacher exists
                             try:
                                 teacher = Teacher.objects.get(national_id=teacher_national_id)
                             except Teacher.DoesNotExist:
                                 # Convert national_id to string for username and password
-                                teacher_national_id_str = str(teacher_national_id)
+                                teacher_national_id_str = str(teacher_national_id)  # کد ملی مدرس به صورت رشته
                                 # Create user first
                                 teacher_user = User.objects.create_user(
                                     username=teacher_national_id_str,
@@ -366,41 +370,42 @@ class CourseAdmin(JalaliDateMixin, admin.ModelAdmin):
                                 # Create teacher with user
                                 teacher = Teacher.objects.create(
                                     user=teacher_user,
-                                    national_id=teacher_national_id_str,
+                                    national_id=teacher_national_id_str,  # کد ملی مدرس به صورت رشته
                                     first_name=teacher_name.split()[0] if pd.notna(teacher_name) else '',
                                     last_name=' '.join(teacher_name.split()[1:]) if pd.notna(teacher_name) else ''
                                 )
                             
                             # 3. Create or get course with term and teacher
                             course, _ = Course.objects.get_or_create(
-                                course_code=row['کددرس'],
+                                course_code=str(row['کددرس']).strip(),
                                 term=term,
                                 defaults={
-                                    'course_name': row['درس'],
-                                    'group_code': row.get('کد‌گروه‌درسی', ''),
+                                    'course_name': str(row['درس']).strip(),
+                                    'group_code': str(row.get('کد‌گروه‌درسی', '')).strip(),
                                     'teacher': teacher,
                                     'max_capacity': int(row.get('حداکثر‌ظرفیت', 0)) or 0,
                                     'student_count': int(row.get('تعداددانشجو', 0)) or 0,
                                     'empty_capacity': int(row.get('ظرفیت‌خالی', 0)) or 0,
-                                    'class_time': row.get('زمان‌تشکیل‌کلاس', ''),
-                                    'faculty_id': row.get('شناسه‌دانشکده', ''),
-                                    'group_type': row.get('نوع‌گروه‌درسی', ''),
-                                    'exam_location': row.get('محل‌آزمون', ''),
-                                    'group_id': row.get('شناسه‌گروه‌درسی', '')
+                                    'class_time': str(row.get('زمان‌تشکیل‌کلاس', '')).strip(),
+                                    'faculty_id': str(row.get('شناسه‌دانشکده', '')).strip(),
+                                    'group_type': str(row.get('نوع‌گروه‌درسی', '')).strip(),
+                                    'exam_location': str(row.get('محل‌آزمون', '')).strip(),
+                                    'group_id': str(row.get('شناسه‌گروه‌درسی', '')).strip(),
+                                    'exam_date': f"{str(row.get('تاریخ‌امتحان', '')).strip()} {str(row.get('زمان‌آزمون', '')).strip()}" if row.get('تاریخ‌امتحان') else None
                                 }
                             )
                             
                             # 4. Create or get student
                             student, student_created = Student.objects.get_or_create(
-                                national_id=row['کدملی'],
+                                national_id=str(row['کدملی']).zfill(10),  # اضافه کردن صفر به ابتدای کد ملی تا 10 رقم
                                 defaults={
-                                    'student_number': row['شماره‌دانشجویی'],
-                                    'first_name': row['نام'],
-                                    'last_name': row['نام‌خانوادگی'],
-                                    'entry_term': row.get('ترم‌ورود', ''),
-                                    'gender': row.get('جنسیت', ''),
-                                    'major_code': row.get('کدرشته', ''),
-                                    'major_name': row.get('رشته', '')
+                                    'student_number': str(row['شماره‌دانشجویی']).zfill(10),  # اضافه کردن صفر به ابتدای شماره دانشجویی تا 10 رقم
+                                    'first_name': str(row['نام']).strip(),
+                                    'last_name': str(row['نام‌خانوادگی']).strip(),
+                                    'entry_term': str(row.get('ترم‌ورود', '')).strip(),
+                                    'gender': str(row.get('جنسیت', '')).strip(),
+                                    'major_code': str(row.get('کدرشته', '')).strip(),
+                                    'major_name': str(row.get('رشته', '')).strip()
                                 }
                             )
                             
@@ -677,8 +682,12 @@ class StudentCourseAdmin(JalaliDateMixin, admin.ModelAdmin):
         
         # اگر فیلتر ترم اعمال نشده بود، بر اساس آخرین ترم فیلتر کن
         if 'term__id__exact' not in request.GET:
-            latest_term = Term.objects.latest('created_at')
-            if latest_term:
-                qs = qs.filter(term=latest_term)
+            try:
+                latest_term = Term.objects.latest('created_at')
+                if latest_term:
+                    qs = qs.filter(term=latest_term)
+            except Term.DoesNotExist:
+                # اگر هیچ ترمی وجود نداشت، همه رکوردها را نمایش بده
+                pass
                 
         return qs
