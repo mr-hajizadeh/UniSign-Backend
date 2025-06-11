@@ -100,34 +100,33 @@ WSGI_APPLICATION = 'unisign.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-# DATABASES = {
-#     'default': {
-#         'ENGINE': 'django.db.backends.mysql',
-#         'NAME': 'university',  # اسم دیتابیس
-#         'USER': 'root',  # یوزر دیتابیس
-#         'PASSWORD': '',  # رمز عبور
-#         'HOST': 'localhost',  # یا IP سرور
-#         'PORT': '3306',  # پورت پیش‌فرض MySQL
-#         'OPTIONS': {
-#             'sql_mode': 'STRICT_TRANS_TABLES',
-#         },
-#     }
-# }
-
 DATABASES = {
-
     'default': {
         'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'hungry_lewin',  # اسم دیتابیس
+        'NAME': 'university',  # اسم دیتابیس
         'USER': 'root',  # یوزر دیتابیس
-        'PASSWORD': 'zS9Mab7e2DAtkpulvywE6BCI',  # رمز عبور
-        'HOST': 'unisigndb',  # یا IP سرور
+        'PASSWORD': '',  # رمز عبور
+        'HOST': 'localhost',  # یا IP سرور
         'PORT': '3306',  # پورت پیش‌فرض MySQL
         'OPTIONS': {
             'sql_mode': 'STRICT_TRANS_TABLES',
         },
     }
 }
+
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'django.db.backends.mysql',
+#         'NAME': 'hungry_lewin',  # اسم دیتابیس
+#         'USER': 'root',  # یوزر دیتابیس
+#         'PASSWORD': 'zS9Mab7e2DAtkpulvywE6BCI',  # رمز عبور
+#         'HOST': 'unisigndb',  # یا IP سرور
+#         'PORT': '3306',  # پورت پیش‌فرض MySQL
+#         'OPTIONS': {
+#             'sql_mode': 'STRICT_TRANS_TABLES',
+#         },
+#     }
+# }
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators

@@ -1,0 +1,190 @@
+{% extends "admin/base_site.html" %}
+{% load i18n static %}
+
+{% block extrastyle %}
+{{ block.super }}
+<style>
+    .upload-container {
+        max-width: 800px;
+        margin: 2rem auto;
+        padding: 2rem;
+        background: #fff;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .upload-header {
+        text-align: center;
+        margin-bottom: 2rem;
+        padding-bottom: 1rem;
+        border-bottom: 2px solid #eee;
+    }
+    .upload-header h3 {
+        color: #417690;
+        font-size: 1.5rem;
+        margin-bottom: 0.5rem;
+    }
+    .upload-instructions {
+        background: #f8f9fa;
+        padding: 1.5rem;
+        border-radius: 6px;
+        margin-bottom: 2rem;
+    }
+    .upload-instructions h4 {
+        color: #417690;
+        margin-bottom: 1rem;
+    }
+    .upload-instructions ul {
+        list-style-type: none;
+        padding: 0;
+    }
+    .upload-instructions li {
+        margin-bottom: 0.5rem;
+        padding-right: 1.5rem;
+        position: relative;
+    }
+    .upload-instructions li:before {
+        content: "•";
+        color: #417690;
+        position: absolute;
+        right: 0;
+    }
+    .form-group {
+        margin-bottom: 1.5rem;
+    }
+    .form-group label {
+        display: block;
+        margin-bottom: 0.5rem;
+        color: #333;
+        font-weight: bold;
+    }
+    .form-group input[type="file"],
+    .form-group select {
+        display: block;
+        width: 100%;
+        padding: 0.5rem;
+        border: 2px dashed #ddd;
+        border-radius: 4px;
+        background: #f8f9fa;
+    }
+    .button-group {
+        display: flex;
+        gap: 1rem;
+        justify-content: flex-end;
+        margin-top: 2rem;
+    }
+    .btn {
+        padding: 0.5rem 1.5rem;
+        border-radius: 4px;
+        font-weight: bold;
+        text-decoration: none;
+        cursor: pointer;
+        border: none;
+    }
+    .btn-primary {
+        background: #417690;
+        color: white;
+    }
+    .btn-secondary {
+        background: #6c757d;
+        color: white;
+    }
+    .btn:hover {
+        opacity: 0.9;
+    }
+    .preview-container {
+        margin-top: 2rem;
+        padding: 1rem;
+        background: #f8f9fa;
+        border-radius: 6px;
+        display: none;
+    }
+    .preview-container.active {
+        display: block;
+    }
+    .template-download {
+        margin-top: 1rem;
+        padding: 1rem;
+        background: #e8f4f8;
+        border-radius: 6px;
+        text-align: center;
+    }
+    .template-download a {
+        color: #417690;
+        text-decoration: none;
+        font-weight: bold;
+    }
+    .template-download a:hover {
+        text-decoration: underline;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="upload-container">
+    <div class="upload-header">
+        <h3>آپلود فایل Excel</h3>
+        <p>برای آپلود لیست دانشجویان، فایل Excel خود را انتخاب کنید</p>
+    </div>
+
+    <div class="upload-instructions">
+        <h4>راهنمای آپلود فایل Excel:</h4>
+        <ul>
+            <li>فایل باید با فرمت Excel (.xlsx یا .xls) باشد</li>
+            <li>ستون‌های مورد نیاز: کد ملی، شماره دانشجویی، نام، نام خانوادگی</li>
+            <li>اطلاعات باید از سطر دوم شروع شود (سطر اول برای عنوان ستون‌ها)</li>
+            <li>ترتیب ستون‌ها باید مطابق با قالب نمونه باشد</li>
+        </ul>
+    </div>
+
+    <div class="template-download">
+        <p>برای دانلود قالب نمونه Excel <a href="{% url 'admin:download-excel-template' %}" target="_blank">اینجا</a> کلیک کنید</p>
+    </div>
+
+    <form method="post" enctype="multipart/form-data" id="excelUploadForm">
+        {% csrf_token %}
+        <div class="form-group">
+            <label for="id_excel_file">فایل Excel:</label>
+            {{ form.excel_file }}
+        </div>
+        <div class="form-group">
+            <label for="id_term">ترم:</label>
+            {{ form.term }}
+        </div>
+        <div class="button-group">
+            <a href="{% url 'admin:unisign_course_changelist' %}" class="btn btn-secondary">بازگشت</a>
+            <button type="submit" class="btn btn-primary">آپلود فایل</button>
+        </div>
+    </form>
+
+    <div class="preview-container" id="previewContainer">
+        <h4>پیش‌نمایش فایل:</h4>
+        <div id="previewContent"></div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const fileInput = document.querySelector('input[type="file"]');
+    const previewContainer = document.getElementById('previewContainer');
+    const previewContent = document.getElementById('previewContent');
+
+    fileInput.addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (file) {
+            const validTypes = [
+                'application/vnd.ms-excel',
+                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            ];
+            if (validTypes.includes(file.type)) {
+                previewContent.innerHTML = `<p>نام فایل: ${file.name}</p>`;
+                previewContainer.classList.add('active');
+            } else {
+                alert('لطفاً فقط فایل Excel آپلود کنید');
+                fileInput.value = '';
+                previewContainer.classList.remove('active');
+            }
+        }
+    });
+});
+</script>
+{% endblock %} 

@@ -33,6 +33,7 @@ def upload_excel(request):
         if form.is_valid():
             excel_file = request.FILES['file']
             term_name = form.cleaned_data['term']
+            course_id = request.POST.get('course_id')
             
             # Get or create term
             term, created = Term.objects.get_or_create(name=term_name)
@@ -44,30 +45,40 @@ def upload_excel(request):
                 success_count = 0
                 duplicate_count = 0
                 
+                # If course_id is provided, get the course
+                course = None
+                if course_id:
+                    try:
+                        course = Course.objects.get(id=course_id)
+                    except Course.DoesNotExist:
+                        messages.error(request, 'درس مورد نظر یافت نشد.')
+                        return redirect('teacher_dashboard')
+                
                 for _, row in df.iterrows():
                     try:
-                        # Create or get course
-                        course, _ = Course.objects.get_or_create(
-                            course_code=row.get('کددرس', ''),
-                            group_code=row.get('کد‌گروه‌درسی', ''),
-                            term=term,
-                            defaults={
-                                'course_name': row.get('درس', ''),
-                                'teacher_national_id': row.get('کدملی‌مدرس', ''),
-                                'teacher_name': row.get('نام‌مدرس', ''),
-                                'max_capacity': row.get('حداکثر‌ظرفیت', 0) or 0,
-                                'student_count': row.get('تعداددانشجو', 0) or 0,
-                                'empty_capacity': row.get('ظرفیت‌خالی', 0) or 0,
-                                'class_time': row.get('زمان‌تشکیل‌کلاس', ''),
-                                'faculty_id': row.get('شناسه‌دانشکده', ''),
-                                'group_type': row.get('نوع‌گروه‌درسی', ''),
-                                'exam_location': row.get('محل‌آزمون', ''),
-                                'exam_date': row.get('تاریخ‌امتحان', ''),
-                                'exam_time': row.get('زمان‌آزمون', ''),
-                                'group_id': row.get('شناسه‌گروه‌درسی', ''),
-                                'registration_date': row.get('تاریخ‌ثبت', ''),
-                            }
-                        )
+                        # If course is not provided, create or get it from Excel
+                        if not course:
+                            course, _ = Course.objects.get_or_create(
+                                course_code=row.get('کددرس', ''),
+                                group_code=row.get('کد‌گروه‌درسی', ''),
+                                term=term,
+                                defaults={
+                                    'course_name': row.get('درس', ''),
+                                    'teacher_national_id': row.get('کدملی‌مدرس', ''),
+                                    'teacher_name': row.get('نام‌مدرس', ''),
+                                    'max_capacity': row.get('حداکثر‌ظرفیت', 0) or 0,
+                                    'student_count': row.get('تعداددانشجو', 0) or 0,
+                                    'empty_capacity': row.get('ظرفیت‌خالی', 0) or 0,
+                                    'class_time': row.get('زمان‌تشکیل‌کلاس', ''),
+                                    'faculty_id': row.get('شناسه‌دانشکده', ''),
+                                    'group_type': row.get('نوع‌گروه‌درسی', ''),
+                                    'exam_location': row.get('محل‌آزمون', ''),
+                                    'exam_date': row.get('تاریخ‌امتحان', ''),
+                                    'exam_time': row.get('زمان‌آزمون', ''),
+                                    'group_id': row.get('شناسه‌گروه‌درسی', ''),
+                                    'registration_date': row.get('تاریخ‌ثبت', ''),
+                                }
+                            )
                         
                         # Create or get student (without term)
                         student, _ = Student.objects.get_or_create(
@@ -101,6 +112,10 @@ def upload_excel(request):
                     messages.warning(request, f'{duplicate_count} ثبت‌نام تکراری نادیده گرفته شد.')
                 if success_count > 0:
                     messages.success(request, f'{success_count} ثبت‌نام با موفقیت انجام شد.')
+                
+                # Redirect back to teacher dashboard if course_id was provided
+                if course_id:
+                    return redirect('teacher_dashboard')
                 return redirect('upload_excel')
                 
             except Exception as e:

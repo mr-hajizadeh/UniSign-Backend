@@ -7,11 +7,17 @@ from .models import Teacher, Course, Term
 import jdatetime
 
 class ExcelUploadForm(forms.Form):
-    file = forms.FileField(label='فایل اکسل')
+    excel_file = forms.FileField(
+        label='فایل Excel',
+        help_text='فایل Excel را انتخاب کنید'
+    )
     term = forms.CharField(
         max_length=50,
         label='ترم',
-        widget=forms.TextInput(attrs={'placeholder': 'مثال: ۱۴۰۳-۲'})
+        widget=forms.TextInput(attrs={
+            'placeholder': 'مثال: 032',
+            'class': 'vTextField'
+        })
     )
 
 class TeacherRegistrationForm(UserCreationForm):

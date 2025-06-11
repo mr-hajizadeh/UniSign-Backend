@@ -24,7 +24,7 @@
                                 <th>محل امتحان</th>
                                 <th>تاریخ امتحان</th>
                                 <th>زمان امتحان</th>
-                                <th>آپلود PDF</th>
+                                <th>عملیات</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -41,13 +41,23 @@
                                 <td>{{ course.exam_date }}</td>
                                 <td>{{ course.exam_time }}</td>
                                 <td>
-                                    <form method="post" action="{% url 'upload_course_pdf' course.id %}" enctype="multipart/form-data" class="d-inline">
-                                        {% csrf_token %}
-                                        <input type="file" name="pdf_file" accept=".pdf" class="d-none" id="pdf-upload-{{ course.id }}" onchange="this.form.submit()">
-                                        <button type="button" class="btn btn-primary btn-sm" onclick="document.getElementById('pdf-upload-{{ course.id }}').click()">
-                                            آپلود PDF
-                                        </button>
-                                    </form>
+                                    <div class="btn-group" role="group">
+                                        <form method="post" action="{% url 'upload_course_pdf' course.id %}" enctype="multipart/form-data" class="d-inline">
+                                            {% csrf_token %}
+                                            <input type="file" name="pdf_file" accept=".pdf" class="d-none" id="pdf-upload-{{ course.id }}" onchange="this.form.submit()">
+                                            <button type="button" class="btn btn-primary btn-sm" onclick="document.getElementById('pdf-upload-{{ course.id }}').click()">
+                                                آپلود PDF
+                                            </button>
+                                        </form>
+                                        <form method="post" action="{% url 'upload_excel' %}" enctype="multipart/form-data" class="d-inline">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="course_id" value="{{ course.id }}">
+                                            <input type="file" name="file" accept=".xlsx,.xls" class="d-none" id="excel-upload-{{ course.id }}" onchange="this.form.submit()">
+                                            <button type="button" class="btn btn-success btn-sm" onclick="document.getElementById('excel-upload-{{ course.id }}').click()">
+                                                آپلود Excel
+                                            </button>
+                                        </form>
+                                    </div>
                                 </td>
                             </tr>
                             {% endfor %}

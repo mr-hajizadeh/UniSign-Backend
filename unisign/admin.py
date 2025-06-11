@@ -25,6 +25,7 @@ from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
 import xlsxwriter
 from io import BytesIO
+import io
 
 # Customize admin site
 admin.site.site_header = 'بخش مدیریت'
@@ -206,6 +207,7 @@ class CourseAdmin(JalaliDateMixin, admin.ModelAdmin):
     search_fields = ('course_code', 'course_name', 'group_code', 'teacher__first_name', 'teacher__last_name')
     list_filter = ('term', 'teacher')
     readonly_fields = ('exam_date_jalali', 'get_students_with_signatures')
+    change_list_template = 'admin/course_change_list.html'
 
     def get_readonly_fields(self, request, obj=None):
         if obj:  # editing an existing object
@@ -248,62 +250,37 @@ class CourseAdmin(JalaliDateMixin, admin.ModelAdmin):
         student_courses = StudentCourse.objects.filter(course=obj).select_related('student')
         
         # Prepare HTML content
-        html = '<div style="margin-top: 10px;">'
-        # Add export button
-        html += f'<a href="/admin/unisign/course/{obj.id}/export-excel/" class="button" style="margin-bottom: 10px; display: inline-block; padding: 10px 20px; background-color: #417690; color: white; text-decoration: none; border-radius: 4px;">دانلود لیست به صورت Excel</a>'
-        html += '<table style="width: 100%; border-collapse: collapse;">'
-        html += '<tr style="background-color: #f5f5f5;">'
-        html += '<th style="padding: 8px; border: 1px solid #ddd;">شماره دانشجویی</th>'
-        html += '<th style="padding: 8px; border: 1px solid #ddd;">نام و نام خانوادگی</th>'
-        html += '<th style="padding: 8px; border: 1px solid #ddd;">وضعیت امضا</th>'
-        html += '<th style="padding: 8px; border: 1px solid #ddd;">تصویر امضا</th>'
-        html += '<th style="padding: 8px; border: 1px solid #ddd;">تاریخ امضا</th>'
-        html += '<th style="padding: 8px; border: 1px solid #ddd;">امضا کننده</th>'
-        html += '</tr>'
-        
+        html = '<div class="student-list">'
         for sc in student_courses:
             student = sc.student
             signature = StudentSignature.objects.filter(student=student, course=obj).first()
             
-            html += '<tr>'
-            html += f'<td style="padding: 8px; border: 1px solid #ddd;">{student.student_number}</td>'
-            html += f'<td style="padding: 8px; border: 1px solid #ddd;">{student.first_name} {student.last_name}</td>'
+            html += f'<div class="student-item">'
+            # Add student photo if exists
+            if student.national_id:
+                photo_path = f'students/{student.national_id}.jpg'
+                if default_storage.exists(photo_path):
+                    html += f'<img src="/media/{photo_path}" width="50" height="50" style="border-radius: 50%;" />'
             
-            if signature:
-                html += '<td style="padding: 8px; border: 1px solid #ddd; color: green;">✓ امضا شده</td>'
-                # Add signature image with thumbnail
-                if signature.signature_image:
-                    html += f'<td style="padding: 8px; border: 1px solid #ddd;">'
-                    html += f'<a href="{signature.signature_image.url}" target="_blank">'
-                    html += f'<img src="{signature.signature_image.url}" style="max-width: 100px; max-height: 50px; cursor: pointer;" />'
-                    html += '</a></td>'
-                else:
-                    html += '<td style="padding: 8px; border: 1px solid #ddd;">—</td>'
-                html += f'<td style="padding: 8px; border: 1px solid #ddd;">{signature.created_at_jalali()}</td>'
-                
-                # Show username if first_name and last_name are not available
-                signed_by_name = f"{signature.signed_by.first_name} {signature.signed_by.last_name}".strip()
-                if not signed_by_name:
-                    signed_by_name = signature.signed_by.username
-                html += f'<td style="padding: 8px; border: 1px solid #ddd;">{signed_by_name}</td>'
-            else:
-                html += '<td style="padding: 8px; border: 1px solid #ddd; color: red;">✗ امضا نشده</td>'
-                html += '<td style="padding: 8px; border: 1px solid #ddd;">—</td>'
-                html += '<td style="padding: 8px; border: 1px solid #ddd;">—</td>'
-                html += '<td style="padding: 8px; border: 1px solid #ddd;">—</td>'
+            # Add student info
+            html += f'<div class="student-info">'
+            html += f'<strong>{student.first_name} {student.last_name}</strong><br>'
+            html += f'شماره دانشجویی: {student.student_number}<br>'
+            html += f'کد ملی: {student.national_id}'
             
-            html += '</tr>'
+            # Add signature if exists
+            if signature and signature.signature_image:
+                html += f'<br>امضا: <img src="{signature.signature_image.url}" width="100" />'
+            
+            html += '</div></div>'
         
-        html += '</table>'
         html += '</div>'
-        
         return format_html(html)
-    get_students_with_signatures.short_description = 'لیست دانشجویان'
 
     def formfield_for_dbfield(self, db_field, **kwargs):
         formfield = super().formfield_for_dbfield(db_field, **kwargs)
-        if db_field.name == 'get_students_with_signatures':
-            formfield.label = 'لیست دانشجویان'
+        if db_field.name == "exam_date":
+            formfield.widget = forms.DateTimeInput(attrs={'type': 'datetime-local'})
         return formfield
 
     def get_queryset(self, request):
@@ -324,238 +301,137 @@ class CourseAdmin(JalaliDateMixin, admin.ModelAdmin):
     def get_urls(self):
         urls = super().get_urls()
         custom_urls = [
-            path('upload-excel/', self.admin_site.admin_view(self.upload_excel_view), name='upload-excel'),
-            path('upload-pdf/', self.admin_site.admin_view(self.upload_pdf_view), name='upload_course_pdf'),
-            path(
-                '<int:course_id>/export-excel/',
-                self.admin_site.admin_view(self.export_excel),
-                name='course-export-excel',
-            ),
+            path('upload-excel/', self.upload_excel_view, name='course-upload-excel'),
+            path('upload-pdf/', self.upload_pdf_view, name='course-upload-pdf'),
+            path('download-excel-template/', self.download_excel_template, name='download-excel-template'),
+            path('export-excel/<int:course_id>/', self.export_excel, name='export-excel'),
         ]
         return custom_urls + urls
 
-    def upload_excel_view(self, request):
-        if not request.user.is_authenticated:
-            return redirect('admin:login')
-        if not (is_admin(request.user) or is_teacher(request.user)):
-            messages.error(request, 'شما دسترسی به این صفحه را ندارید.')
-            return redirect('admin:index')
-        return self.upload_excel(request)
+    def upload_excel_button(self, obj):
+        if not obj:
+            return "—"
+        return format_html(
+            '<a class="button" href="{}">آپلود Excel</a>',
+            reverse('admin:course-upload-excel')
+        )
+    upload_excel_button.short_description = 'آپلود Excel'
 
-    def upload_excel(self, request):
+    def upload_pdf_button(self, obj):
+        if not obj:
+            return "—"
+        return format_html(
+            '<a class="button" href="{}">آپلود PDF</a>',
+            reverse('admin:course-upload-pdf')
+        )
+    upload_pdf_button.short_description = 'آپلود PDF'
+
+    def upload_excel_view(self, request):
         if request.method == 'POST':
             form = ExcelUploadForm(request.POST, request.FILES)
             if form.is_valid():
-                excel_file = request.FILES['file']
+                excel_file = request.FILES['excel_file']
                 term_name = form.cleaned_data['term']
                 
-                # Get or create term
-                term, created = Term.objects.get_or_create(name=term_name)
-                if created:
-                    messages.success(request, f'ترم جدید "{term_name}" ایجاد شد.')
-                
                 try:
-                    # خواندن فایل اکسل با حفظ فرمت اعداد
-                    df = pd.read_excel(excel_file, dtype={
-                        'کدملی': str,
-                        'شماره‌دانشجویی': str,
-                        'کدملی‌مدرس': str,
-                        'کددرس': str,
-                        'کد‌گروه‌درسی': str,
-                        'ترم‌ورود': str,
-                        'کدرشته': str,
-                        'شناسه‌دانشکده': str
-                    })
+                    # 1. Create or get term first
+                    term, _ = Term.objects.get_or_create(name=term_name)
                     
-                    # تبدیل ستون‌های عددی به رشته برای حفظ صفرهای ابتدایی
-                    string_columns = ['کددرس', 'کد‌گروه‌درسی', 'کدملی‌مدرس', 'کدملی', 'شماره‌دانشجویی', 'ترم‌ورود', 'کدرشته', 'شناسه‌دانشکده']
-                    for col in string_columns:
-                        if col in df.columns:
-                            df[col] = df[col].fillna('').astype(str).str.strip()
+                    # Read Excel file
+                    df = pd.read_excel(excel_file)
                     
-                    # تبدیل مقادیر عددی به عدد صحیح
-                    numeric_columns = ['حداکثر‌ظرفیت', 'تعداددانشجو', 'ظرفیت‌خالی']
-                    for col in numeric_columns:
-                        if col in df.columns:
-                            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int)
+                    success_count = 0
+                    duplicate_count = 0
                     
-                    records = df.to_dict('records')
-                    
-                    with transaction.atomic():
-                        # دریافت همه اساتید موجود
-                        existing_teachers = {
-                            t.national_id: t 
-                            for t in Teacher.objects.all()
-                        }
-                        
-                        # دریافت همه درس‌های موجود
-                        existing_courses = {
-                            (c.course_code, c.group_code, c.term_id): c # اضافه کردن term_id به کلید
-                            for c in Course.objects.select_related('term').all() # واکشی ترم
-                        }
-                        
-                        # دریافت همه دانشجویان موجود
-                        existing_students = {
-                            s.national_id: s 
-                            for s in Student.objects.all()
-                        }
-                        
-                        # دریافت همه ارتباطات موجود
-                        existing_relationships = {
-                            (sc.student.national_id, sc.course.course_code, sc.course.group_code, sc.term_id): sc # اضافه کردن term_id به کلید
-                            for sc in StudentCourse.objects.select_related('student', 'course__term').all() # واکشی ترم درس و ترم انتخاب واحد
-                        }
-                        
-                        # جمع‌آوری اساتید یکتا
-                        unique_teachers = {}
-                        for record in records:
-                            teacher_national_id = str(record.get('کدملی‌مدرس', '')).strip()
-                            if teacher_national_id and teacher_national_id not in existing_teachers:
-                                teacher_name = str(record.get('نام‌مدرس', ''))
-                                if teacher_name:
-                                    first_name = teacher_name.split()[0]
-                                    last_name = ' '.join(teacher_name.split()[1:])
-                                else:
-                                    first_name = ''
-                                    last_name = ''
-                                unique_teachers[teacher_national_id] = {
-                                    'national_id': teacher_national_id,
-                                    'first_name': first_name,
-                                    'last_name': last_name
+                    for _, row in df.iterrows():
+                        try:
+                            # 2. Create or get teacher
+                            teacher_national_id = row['کدملی‌مدرس']
+                            teacher_name = row['نام‌مدرس']
+                            
+                            # First check if teacher exists
+                            try:
+                                teacher = Teacher.objects.get(national_id=teacher_national_id)
+                            except Teacher.DoesNotExist:
+                                # Convert national_id to string for username and password
+                                teacher_national_id_str = str(teacher_national_id)
+                                # Create user first
+                                teacher_user = User.objects.create_user(
+                                    username=teacher_national_id_str,
+                                    password=teacher_national_id_str,
+                                    is_active=True,
+                                    is_staff=True
+                                )
+                                
+                                # Create teacher with user
+                                teacher = Teacher.objects.create(
+                                    user=teacher_user,
+                                    national_id=teacher_national_id_str,
+                                    first_name=teacher_name.split()[0] if pd.notna(teacher_name) else '',
+                                    last_name=' '.join(teacher_name.split()[1:]) if pd.notna(teacher_name) else ''
+                                )
+                            
+                            # 3. Create or get course with term and teacher
+                            course, _ = Course.objects.get_or_create(
+                                course_code=row['کددرس'],
+                                term=term,
+                                defaults={
+                                    'course_name': row['درس'],
+                                    'group_code': row.get('کد‌گروه‌درسی', ''),
+                                    'teacher': teacher,
+                                    'max_capacity': int(row.get('حداکثر‌ظرفیت', 0)) or 0,
+                                    'student_count': int(row.get('تعداددانشجو', 0)) or 0,
+                                    'empty_capacity': int(row.get('ظرفیت‌خالی', 0)) or 0,
+                                    'class_time': row.get('زمان‌تشکیل‌کلاس', ''),
+                                    'faculty_id': row.get('شناسه‌دانشکده', ''),
+                                    'group_type': row.get('نوع‌گروه‌درسی', ''),
+                                    'exam_location': row.get('محل‌آزمون', ''),
+                                    'group_id': row.get('شناسه‌گروه‌درسی', '')
                                 }
-                        
-                        # ایجاد اساتید جدید
-                        for teacher_data in unique_teachers.values():
-                            # چک کردن وجود کاربر
-                            user = User.objects.filter(username=teacher_data['national_id']).first()
-                            if not user:
-                                try:
-                                    user = User.objects.create_user(
-                                        username=teacher_data['national_id'],
-                                        password=teacher_data['national_id'],  # رمز عبور موقت
-                                        first_name=teacher_data['first_name'],
-                                        last_name=teacher_data['last_name']
-                                    )
-                                    # Add teacher permissions
-                                    add_teacher_permissions(user)
-                                except Exception as e:
-                                    return JsonResponse({
-                                        'success': False,
-                                        'message': f'خطا در ایجاد کاربر با کد ملی {teacher_data["national_id"]}: {str(e)}'
-                                    })
-                            
-                            teacher = Teacher(
-                                user=user,
-                                national_id=teacher_data['national_id'],
-                                first_name=teacher_data['first_name'],
-                                last_name=teacher_data['last_name']
                             )
-                            teacher.save()
-                            existing_teachers[teacher_data['national_id']] = teacher
-                        
-                        # حالا درس‌ها را ذخیره می‌کنیم
-                        for record in records:
-                            course_key = (str(record.get('کددرس', '')), str(record.get('کد‌گروه‌درسی', '')), term.id) # استفاده از ترم
-                            teacher_national_id = str(record.get('کدملی‌مدرس', '')).strip()
                             
-                            # اگر درس وجود نداشت و استاد وجود داشت، آن را ایجاد کن
-                            if course_key not in existing_courses and teacher_national_id in existing_teachers:
-                                # پردازش تاریخ امتحان
-                                exam_date_str = str(record.get('تاریخ‌امتحان', ''))
-                                exam_time_str = str(record.get('زمان‌آزمون', ''))
-                                exam_date = parse_exam_datetime(exam_date_str, exam_time_str)
+                            # 4. Create or get student
+                            student, student_created = Student.objects.get_or_create(
+                                national_id=row['کدملی'],
+                                defaults={
+                                    'student_number': row['شماره‌دانشجویی'],
+                                    'first_name': row['نام'],
+                                    'last_name': row['نام‌خانوادگی'],
+                                    'entry_term': row.get('ترم‌ورود', ''),
+                                    'gender': row.get('جنسیت', ''),
+                                    'major_code': row.get('کدرشته', ''),
+                                    'major_name': row.get('رشته', '')
+                                }
+                            )
+                            
+                            # 5. Create student-course relationship
+                            StudentCourse.objects.get_or_create(
+                                student=student,
+                                course=course,
+                                term=term
+                            )
+                            
+                            if student_created:
+                                success_count += 1
+                            else:
+                                duplicate_count += 1
                                 
-                                # پردازش تاریخ ثبت
-                                registration_date_str = str(record.get('تاریخ‌ثبت', ''))
-                                registration_time_str = '00:00'  # زمان پیش‌فرض برای تاریخ ثبت
-                                registration_date = parse_exam_datetime(registration_date_str, registration_time_str)
-                                
-                                course = Course(
-                                    course_code=str(record.get('کددرس', '')),
-                                    course_name=str(record.get('درس', '')),
-                                    group_code=str(record.get('کد‌گروه‌درسی', '')),
-                                    teacher=existing_teachers[teacher_national_id],
-                                    max_capacity=record.get('حداکثر‌ظرفیت', 0) or 0,
-                                    student_count=record.get('تعداددانشجو', 0) or 0,
-                                    empty_capacity=record.get('ظرفیت‌خالی', 0) or 0,
-                                    class_time=str(record.get('زمان‌تشکیل‌کلاس', '')),
-                                    faculty_id=str(record.get('شناسه‌دانشکده', '')),
-                                    group_type=str(record.get('نوع‌گروه‌درسی', '')),
-                                    exam_location=str(record.get('محل‌آزمون', '')),
-                                    exam_date=exam_date,
-                                    group_id=str(record.get('شناسه‌گروه‌درسی', '')),
-                                    registration_date=registration_date,
-                                    term=term # مرتبط کردن درس با ترم
-                                )
-                                course.save()
-                                existing_courses[course_key] = course
-                            
-                        # حالا دانشجویان و ارتباطات را ایجاد می‌کنیم
-                        for record in records:
-                            course_code = str(record.get('کددرس', ''))
-                            group_code = str(record.get('کد‌گروه‌درسی', ''))
-                            course_key = (course_code, group_code, term.id) # استفاده از ترم
-                            national_id = str(record.get('کدملی', '')).strip()
-                            
-                            # پیدا کردن درس مرتبط با این ترم
-                            course = existing_courses.get(course_key)
-                            
-                            # اگر دانشجو وجود نداشت، آن را ایجاد کن
-                            if national_id not in existing_students:
-                                student = Student(
-                                    first_name=str(record.get('نام', '')),
-                                    last_name=str(record.get('نام‌خانوادگی', '')),
-                                    national_id=national_id,
-                                    student_number=str(record.get('شماره‌دانشجویی', '')),
-                                    entry_term=str(record.get('ترم‌ورود', '')),
-                                    gender=str(record.get('جنسیت', '')),
-                                    major_code=str(record.get('کدرشته', '')),
-                                    major_name=str(record.get('رشته', ''))
-                                )
-                                student.save()
-                                existing_students[national_id] = student
-                            
-                            # اگر درس مرتبط با این ترم و دانشجو وجود داشت و ارتباط هنوز ثبت نشده بود، آن را ایجاد کن
-                            student_obj = existing_students.get(national_id)
-                            relationship_key = (national_id, course_code, group_code, term.id) # استفاده از ترم
-                            
-                            if (student_obj and course and 
-                                relationship_key not in existing_relationships):
-                                StudentCourse.objects.create(
-                                    student=student_obj,
-                                    course=course,
-                                    term=term # مرتبط کردن انتخاب واحد با ترم
-                                )
-                                existing_relationships[relationship_key] = True # ثبت ارتباط در دیکشنری
-
-                    return JsonResponse({
-                        'success': True,
-                        'message': 'اطلاعات با موفقیت استخراج و ذخیره شد.',
-                        'redirect_url': reverse('admin:unisign_course_changelist')
-                    })
+                        except Exception as e:
+                            messages.error(request, f'خطا در پردازش ردیف: {str(e)}')
+                            continue
+                    
+                    messages.success(request, f'تعداد {success_count} دانشجو با موفقیت اضافه شد. تعداد {duplicate_count} دانشجوی تکراری یافت شد.')
+                    return redirect('admin:unisign_course_changelist')
+                    
                 except Exception as e:
-                    return JsonResponse({
-                        'success': False,
-                        'message': f'خطا در پردازش فایل: {str(e)}'
-                    })
-            else:
-                # اگر فرم نامعتبر بود، پیام خطا را در پاسخ برگردان
-                errors = form.errors.as_json()
-                return JsonResponse({
-                    'success': False,
-                    'message': 'لطفاً اطلاعات فرم را بررسی کنید.',
-                    'errors': errors
-                })
+                    messages.error(request, f'خطا در پردازش فایل: {str(e)}')
         else:
             form = ExcelUploadForm()
-        return render(request, 'admin/excel_upload.html', {'form': form})
-
-    def upload_pdf_button(self, obj):
-        return format_html(
-            '<a class="button" href="#" onclick="showPdfUploadModal(); return false;">آپلود PDF</a>'
-        )
-    upload_pdf_button.short_description = 'آپلود PDF'
-    upload_pdf_button.allow_tags = True
+        
+        return render(request, 'admin/upload_excel.html', {
+            'form': form,
+            'title': 'آپلود فایل Excel'
+        })
 
     def upload_pdf_view(self, request):
         if request.method == 'POST':
@@ -564,57 +440,90 @@ class CourseAdmin(JalaliDateMixin, admin.ModelAdmin):
                 pdf_file = request.FILES['pdf_file']
                 
                 try:
-                    # Process PDF directly from the uploaded file
+                    # Save the PDF file
+                    pdf_path = default_storage.save(f'pdfs/{pdf_file.name}', ContentFile(pdf_file.read()))
+                    
+                    # Extract student information from PDF
                     students_data = extract_students_from_pdf(pdf_file)
 
-                    # Update database
-                    processed_count = 0
+                    success_count = 0
                     for student_data in students_data:
                         try:
-                            # Try to find student by national ID or student number
-                            student = Student.objects.filter(
-                                national_id=student_data['national_id']
-                            ).first() or Student.objects.filter(
-                                student_number=student_data['student_number']
-                            ).first()
-
-                            if student:
-                                # Save student photo if available
-                                if 'student_image' in student_data and student_data['student_image']:
-                                    # فقط مسیر عکس را در دیتابیس ذخیره کن
-                                    student.photo = student_data['student_image']
-                                student.save()
-                                processed_count += 1
+                            # Create or get student
+                            student, created = Student.objects.get_or_create(
+                                national_id=student_data['national_id'],
+                                defaults={
+                                    'student_number': student_data['student_number'],
+                                    'first_name': student_data['first_name'],
+                                    'last_name': student_data['last_name']
+                                }
+                            )
+                            
+                            # Save student photo if available
+                            if 'student_image' in student_data and student_data['student_image']:
+                                photo_path = f'students/{student.national_id}.jpg'
+                                default_storage.save(photo_path, ContentFile(student_data['student_image']))
+                            
+                            success_count += 1
+                            
                         except Exception as e:
-                            return JsonResponse({
-                                'success': False,
-                                'message': f'خطا در پردازش دانشجو {student_data.get("national_id", "نامشخص")}: {str(e)}'
-                            })
-
-                    return JsonResponse({
-                        'success': True,
-                        'message': f'{processed_count} دانشجو با موفقیت پردازش شدند.',
-                        'redirect_url': reverse('admin:unisign_course_changelist')
-                    })
+                            messages.error(request, f'خطا در پردازش اطلاعات دانشجو: {str(e)}')
+                            continue
+                    
+                    messages.success(request, f'تعداد {success_count} دانشجو با موفقیت اضافه شد.')
+                    return redirect('admin:unisign_course_changelist')
+                    
                 except Exception as e:
-                    return JsonResponse({
-                        'success': False,
-                        'message': f'خطا در پردازش فایل PDF: {str(e)}'
-                    })
-            else:
-                return JsonResponse({
-                    'success': False,
-                    'message': 'لطفاً یک فایل PDF معتبر انتخاب کنید.'
-                })
+                    messages.error(request, f'خطا در پردازش فایل: {str(e)}')
         else:
             form = PDFUploadForm()
 
-        context = {
+        return render(request, 'admin/upload_pdf.html', {
             'form': form,
-            'title': 'آپلود PDF',
-            'opts': self.model._meta,
-        }
-        return render(request, 'admin/excel_processor/course/upload_pdf.html', context)
+            'title': 'آپلود فایل PDF'
+        })
+
+    def download_excel_template(self, request):
+        """View for downloading the Excel template"""
+        # Create a sample DataFrame with the required columns
+        df = pd.DataFrame({
+            'کد ملی': ['0123456789'],
+            'شماره دانشجویی': ['123456789'],
+            'نام': ['نام'],
+            'نام خانوادگی': ['نام خانوادگی']
+        })
+
+        # Create Excel file in memory
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+            df.to_excel(writer, index=False, sheet_name='دانشجویان')
+            
+            # Get the workbook and worksheet objects
+            workbook = writer.book
+            worksheet = writer.sheets['دانشجویان']
+            
+            # Add some formatting
+            header_format = workbook.add_format({
+                'bold': True,
+                'text_wrap': True,
+                'valign': 'top',
+                'bg_color': '#D9E1F2',
+                'border': 1
+            })
+            
+            # Write the column headers with the defined format
+            for col_num, value in enumerate(df.columns.values):
+                worksheet.write(0, col_num, value, header_format)
+                worksheet.set_column(col_num, col_num, 15)  # Set column width
+
+        # Set up the response
+        output.seek(0)
+        response = HttpResponse(
+            output.read(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        response['Content-Disposition'] = 'attachment; filename=template.xlsx'
+        return response
 
     def export_excel(self, request, course_id):
         course = Course.objects.get(id=course_id)
