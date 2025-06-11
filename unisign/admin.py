@@ -26,6 +26,7 @@ from django.core.files.base import ContentFile
 import xlsxwriter
 from io import BytesIO
 import io
+import logging
 
 # Customize admin site
 admin.site.site_header = 'بخش مدیریت'
@@ -249,33 +250,98 @@ class CourseAdmin(JalaliDateMixin, admin.ModelAdmin):
         # Get all students in this course
         student_courses = StudentCourse.objects.filter(course=obj).select_related('student')
         
-        # Prepare HTML content
-        html = '<div class="student-list">'
+        # Prepare HTML content with table
+        html = '''
+        <div style="margin: 20px 0; text-align: left; direction: rtl;">
+            <a href="{}" class="button" style="
+                display: inline-block;
+                padding: 10px 20px;
+                background-color: #417690;
+                color: white;
+                text-decoration: none;
+                border-radius: 4px;
+                font-weight: bold;
+                margin-bottom: 15px;
+                border: none;
+                cursor: pointer;
+                transition: background-color 0.3s;
+            " onmouseover="this.style.backgroundColor='#2b5070'" onmouseout="this.style.backgroundColor='#417690'">
+                <i class="fas fa-file-excel" style="margin-left: 5px;"></i>
+                دانلود Excel
+            </a>
+        </div>
+        <table class="student-table" style="width: 100%; border-collapse: collapse; margin-top: 10px;">
+            <thead>
+                <tr style="background-color: #f5f5f5;">
+                    <th style="padding: 8px; border: 1px solid #ddd;">تصویر</th>
+                    <th style="padding: 8px; border: 1px solid #ddd;">نام و نام خانوادگی</th>
+                    <th style="padding: 8px; border: 1px solid #ddd;">شماره دانشجویی</th>
+                    <th style="padding: 8px; border: 1px solid #ddd;">کد ملی</th>
+                    <th style="padding: 8px; border: 1px solid #ddd;">وضعیت امضا</th>
+                    <th style="padding: 8px; border: 1px solid #ddd;">تاریخ امضا</th>
+                    <th style="padding: 8px; border: 1px solid #ddd;">امضا کننده</th>
+                </tr>
+            </thead>
+            <tbody>
+        '''.format(reverse('admin:export-students-excel', args=[obj.id]))
+        
         for sc in student_courses:
             student = sc.student
             signature = StudentSignature.objects.filter(student=student, course=obj).first()
             
-            html += f'<div class="student-item">'
+            html += '<tr>'
+            
             # Add student photo if exists
+            html += '<td style="padding: 8px; border: 1px solid #ddd; text-align: center;">'
             if student.national_id:
                 photo_path = f'students/{student.national_id}.jpg'
                 if default_storage.exists(photo_path):
                     html += f'<img src="/media/{photo_path}" width="50" height="50" style="border-radius: 50%;" />'
+            html += '</td>'
             
-            # Add student info
-            html += f'<div class="student-info">'
-            html += f'<strong>{student.first_name} {student.last_name}</strong><br>'
-            html += f'شماره دانشجویی: {student.student_number}<br>'
-            html += f'کد ملی: {student.national_id}'
+            # Add student name
+            html += f'<td style="padding: 8px; border: 1px solid #ddd;">{student.first_name} {student.last_name}</td>'
             
-            # Add signature if exists
+            # Add student number
+            html += f'<td style="padding: 8px; border: 1px solid #ddd;">{student.student_number}</td>'
+            
+            # Add national ID
+            html += f'<td style="padding: 8px; border: 1px solid #ddd;">{student.national_id}</td>'
+            
+            # Add signature status
+            html += '<td style="padding: 8px; border: 1px solid #ddd; text-align: center;">'
             if signature and signature.signature_image:
-                html += f'<br>امضا: <img src="{signature.signature_image.url}" width="100" />'
+                html += f'<img src="/media/{signature.signature_image}" width="100" style="max-height: 50px;" />'
+            else:
+                html += '<span style="color: red;">بدون امضا</span>'
+            html += '</td>'
             
-            html += '</div></div>'
+            # Add signature date
+            html += '<td style="padding: 8px; border: 1px solid #ddd;">'
+            if signature:
+                html += signature.created_at_jalali()
+            else:
+                html += '—'
+            html += '</td>'
+            
+            # Add signature collector
+            html += '<td style="padding: 8px; border: 1px solid #ddd;">'
+            if signature and signature.signed_by:
+                full_name = f"{signature.signed_by.first_name} {signature.signed_by.last_name}".strip()
+                html += full_name if full_name else signature.signed_by.username
+            else:
+                html += '—'
+            html += '</td>'
+            
+            html += '</tr>'
         
-        html += '</div>'
+        html += '''
+            </tbody>
+        </table>
+        '''
+        
         return format_html(html)
+    get_students_with_signatures.short_description = 'لیست دانشجویان با امضا'
 
     def formfield_for_dbfield(self, db_field, **kwargs):
         formfield = super().formfield_for_dbfield(db_field, **kwargs)
@@ -309,6 +375,7 @@ class CourseAdmin(JalaliDateMixin, admin.ModelAdmin):
             path('upload-pdf/', self.upload_pdf_view, name='course-upload-pdf'),
             path('download-excel-template/', self.download_excel_template, name='download-excel-template'),
             path('export-excel/<int:course_id>/', self.export_excel, name='export-excel'),
+            path('export-students-excel/<int:course_id>/', self.export_students_excel, name='export-students-excel'),
         ]
         return custom_urls + urls
 
@@ -631,6 +698,139 @@ class CourseAdmin(JalaliDateMixin, admin.ModelAdmin):
         )
         response['Content-Disposition'] = f'attachment; filename=course_{course.course_code}_{course.group_code}_students.xlsx'
         return response
+
+    def export_students_excel(self, request, course_id):
+        try:
+            course = Course.objects.get(id=course_id)
+            student_courses = StudentCourse.objects.filter(course=course).select_related('student')
+            
+            # Create Excel file in memory
+            output = BytesIO()
+            with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                # Create DataFrame without images
+                data = []
+                for sc in student_courses:
+                    student = sc.student
+                    signature = StudentSignature.objects.filter(student=student, course=course).first()
+                    
+                    # Get signature collector name
+                    collector_name = '—'
+                    if signature and signature.signed_by:
+                        full_name = f"{signature.signed_by.first_name} {signature.signed_by.last_name}".strip()
+                        collector_name = full_name if full_name else signature.signed_by.username
+                    
+                    row = {
+                        'تصویر دانشجو': '',  # Placeholder for student photo
+                        'نام': student.first_name,
+                        'نام خانوادگی': student.last_name,
+                        'شماره دانشجویی': student.student_number,
+                        'کد ملی': student.national_id,
+                        'وضعیت امضا': 'دارد' if signature and signature.signature_image else 'ندارد',
+                        'تاریخ امضا': signature.created_at_jalali() if signature else '—',
+                        'امضا کننده': collector_name,
+                        'تصویر امضا': ''  # Placeholder for signature image
+                    }
+                    data.append(row)
+                
+                df = pd.DataFrame(data)
+                df.to_excel(writer, sheet_name='دانشجویان', index=False, startrow=5)  # Start from row 6 to leave space for header
+                
+                # Get workbook and worksheet objects
+                workbook = writer.book
+                worksheet = writer.sheets['دانشجویان']
+                
+                # Add header formatting
+                header_format = workbook.add_format({
+                    'bold': True,
+                    'text_wrap': True,
+                    'valign': 'top',
+                    'bg_color': '#D9E1F2',
+                    'border': 1
+                })
+                
+                title_format = workbook.add_format({
+                    'bold': True,
+                    'font_size': 14,
+                    'align': 'center',
+                    'valign': 'vcenter'
+                })
+                
+                # Add course information in header
+                worksheet.merge_range('A1:J1', f'لیست دانشجویان درس {course.course_name}', title_format)
+                worksheet.merge_range('A2:J2', f'کد درس: {course.course_code} - گروه: {course.group_code}', title_format)
+                worksheet.merge_range('A3:J3', f'استاد: {course.teacher.first_name} {course.teacher.last_name}', title_format)
+                worksheet.merge_range('A4:J4', f'تاریخ امتحان: {course.exam_date_jalali() if course.exam_date else "تعیین نشده"}', title_format)
+                worksheet.merge_range('A5:J5', f'محل امتحان: {course.exam_location if course.exam_location else "تعیین نشده"}', title_format)
+                
+                # Write the column headers with the defined format
+                for col_num, value in enumerate(df.columns.values):
+                    worksheet.write(5, col_num, value, header_format)  # Start from row 6 (index 5)
+                    worksheet.set_column(col_num, col_num, 15)  # Set column width
+                
+                # Set specific column widths
+                worksheet.set_column('A:A', 20)  # Set width for student photo column
+                worksheet.set_column('I:I', 15)  # Set width for signature column
+                
+                for row_num, sc in enumerate(student_courses, start=6):  # Start from row 7 (index 6)
+                    student = sc.student
+                    signature = StudentSignature.objects.filter(student=student, course=course).first()
+                    
+                    # Add student photo if exists
+                    if student.national_id:
+                        photo_path = f'students/{student.national_id}.jpg'
+                        if default_storage.exists(photo_path):
+                            try:
+                                # Get the full path of the photo
+                                photo_full_path = default_storage.path(photo_path)
+                                worksheet.insert_image(
+                                    row_num, 0,  # Column A (index 0)
+                                    photo_full_path,
+                                    {
+                                        'x_scale': 0.3,  # Scale to 30% of original size
+                                        'y_scale': 0.3,
+                                        'x_offset': 5,
+                                        'y_offset': 5,
+                                        'positioning': 1  # Move and size with cells
+                                    }
+                                )
+                            except Exception as e:
+                                logger.error(f"Error adding student photo: {str(e)}")
+                    
+                    # Add signature image if exists
+                    if signature and signature.signature_image:
+                        try:
+                            # Get the full path of the signature image
+                            signature_full_path = default_storage.path(signature.signature_image.name)
+                            worksheet.insert_image(
+                                row_num, 8,  # Column I (index 8)
+                                signature_full_path,
+                                {
+                                    'x_scale': 0.1,  # Scale down to 10% of original size
+                                    'y_scale': 0.1,
+                                    'x_offset': 5,
+                                    'y_offset': 5,
+                                    'positioning': 1  # Move and size with cells
+                                }
+                            )
+                        except Exception as e:
+                            logger.error(f"Error adding signature image: {str(e)}")
+                    
+                    # Set row height to accommodate the images
+                    worksheet.set_row(row_num, 100)  # 100 points = 133 pixels
+            
+            # Set up the response
+            output.seek(0)
+            response = HttpResponse(
+                output.read(),
+                content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            )
+            response['Content-Disposition'] = f'attachment; filename=students_{course.course_code}_{course.group_code}.xlsx'
+            
+            return response
+            
+        except Exception as e:
+            messages.error(request, f'خطا در ایجاد فایل Excel: {str(e)}')
+            return redirect('admin:unisign_course_change', course_id)
 
 @admin.register(Student)
 class StudentAdmin(admin.ModelAdmin):
