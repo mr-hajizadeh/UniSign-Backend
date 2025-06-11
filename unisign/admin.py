@@ -440,37 +440,32 @@ class CourseAdmin(JalaliDateMixin, admin.ModelAdmin):
                 pdf_file = request.FILES['pdf_file']
                 
                 try:
-                    # Save the PDF file
-                    pdf_path = default_storage.save(f'pdfs/{pdf_file.name}', ContentFile(pdf_file.read()))
-                    
                     # Extract student information from PDF
                     students_data = extract_students_from_pdf(pdf_file)
 
                     success_count = 0
                     for student_data in students_data:
                         try:
-                            # Create or get student
-                            student, created = Student.objects.get_or_create(
-                                national_id=student_data['national_id'],
-                                defaults={
-                                    'student_number': student_data['student_number'],
-                                    'first_name': student_data['first_name'],
-                                    'last_name': student_data['last_name']
-                                }
-                            )
-                            
-                            # Save student photo if available
-                            if 'student_image' in student_data and student_data['student_image']:
-                                photo_path = f'students/{student.national_id}.jpg'
-                                default_storage.save(photo_path, ContentFile(student_data['student_image']))
-                            
-                            success_count += 1
+                            # فقط دانشجوی موجود رو پیدا می‌کنیم
+                            try:
+                                student = Student.objects.get(national_id=student_data['national_id'])
+                                
+                                # فقط عکس دانشجو رو به‌روز می‌کنیم
+                                if student_data['student_image']:
+                                    student.photo.name = student_data['student_image']
+                                    student.save()
+                                    success_count += 1
+                                
+                            except Student.DoesNotExist:
+                                # اگر دانشجو پیدا نشد، فقط پیام خطا نمایش میدیم
+                                messages.warning(request, f'دانشجو با کد ملی {student_data["national_id"]} یافت نشد.')
+                                continue
                             
                         except Exception as e:
                             messages.error(request, f'خطا در پردازش اطلاعات دانشجو: {str(e)}')
                             continue
                     
-                    messages.success(request, f'تعداد {success_count} دانشجو با موفقیت اضافه شد.')
+                    messages.success(request, f'تعداد {success_count} عکس دانشجو با موفقیت به‌روز شد.')
                     return redirect('admin:unisign_course_changelist')
                     
                 except Exception as e:
