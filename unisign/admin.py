@@ -390,10 +390,18 @@ class CourseAdmin(JalaliDateMixin, admin.ModelAdmin):
                                     'faculty_id': str(row.get('شناسه‌دانشکده', '')).strip(),
                                     'group_type': str(row.get('نوع‌گروه‌درسی', '')).strip(),
                                     'exam_location': str(row.get('محل‌آزمون', '')).strip(),
-                                    'group_id': str(row.get('شناسه‌گروه‌درسی', '')).strip(),
-                                    'exam_date': f"{str(row.get('تاریخ‌امتحان', '')).strip()} {str(row.get('زمان‌آزمون', '')).strip()}" if row.get('تاریخ‌امتحان') else None
+                                    'group_id': str(row.get('شناسه‌گروه‌درسی', '')).strip()
                                 }
                             )
+                            
+                            # به‌روزرسانی تاریخ و زمان امتحان
+                            exam_date = str(row.get('تاریخ‌امتحان', '')).strip()
+                            exam_time = str(row.get('زمان‌آزمون', '')).strip()
+                            if exam_date and exam_time:
+                                parsed_date = parse_exam_datetime(exam_date, exam_time)
+                                if parsed_date:
+                                    course.exam_date = parsed_date
+                                    course.save()
                             
                             # 4. Create or get student
                             student, student_created = Student.objects.get_or_create(
