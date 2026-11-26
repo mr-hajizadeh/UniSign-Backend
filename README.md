@@ -22,27 +22,16 @@ The system also includes a Django Admin interface and REST API to communicate wi
 
 ## 🖼️ Screenshots
 
-The following screenshots can be added to the `screenshots/` directory:
-
-```text
-screenshots/
-├── admin_dashboard.png
-├── courses.png
-├── students.png
-├── excel_upload.png
-├── pdf_upload.png
-└── attendance.png
-```
-
-<!-- Replace these placeholders with actual screenshots of your Django application. -->
-
-| Admin Dashboard | Course Management |
-|---|---|
-| ![Dashboard](screenshots/admin_dashboard.png) | ![Courses](screenshots/courses.png) |
-
-| Excel Import | PDF Processing |
-|---|---|
-| ![Excel Import](screenshots/excel_upload.png) | ![PDF Processing](screenshots/pdf_upload.png) |
+<table>
+  <tr>
+    <td align="center"><strong>Admin Login</strong><br><img src="screenshots/login.png" alt="UniSign admin login page" width="400" height="250" style="object-fit: contain;" /></td>
+    <td align="center"><strong>Course Management</strong><br><img src="screenshots/Courses.png" alt="UniSign course management page" width="400" height="250" style="object-fit: contain;" /></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>Excel Upload</strong><br><img src="screenshots/upload_excel.png" alt="UniSign Excel upload page" width="400" height="250" style="object-fit: contain;" /></td>
+    <td align="center"><strong>PDF Upload</strong><br><img src="screenshots/upload_pdf.png" alt="UniSign PDF upload page" width="400" height="250" style="object-fit: contain;" /></td>
+  </tr>
+</table>
 
 ## 🛠️ Tech Stack
 
